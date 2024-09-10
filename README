@@ -1,0 +1,3 @@
+alembic revision --autogenerate -m "Add user model"
+alembic upgrade head
+alembic downgrade -1
