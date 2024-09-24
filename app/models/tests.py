@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from app.models import created_at, updated_at, str_uniq, str_nullable, uuid_pk, int_pk
 import uuid
+from sqlalchemy.ext.mutable import MutableList
+
+
 user_nullable_fk = Annotated[
     uuid.UUID,
     mapped_column(
@@ -84,7 +87,7 @@ class RatingChoice(Base):
     )
     looser_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(CompetitionItem.id, ondelete="CASCADE", onupdate="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     stage: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
@@ -98,7 +101,9 @@ class Rating(Base):
     user_id: Mapped[user_fk]
     ended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     stage: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    choices: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID), default=[])
+    choices: Mapped[list[uuid.UUID]] = mapped_column(
+        MutableList.as_mutable(ARRAY(UUID)), default=[]
+    )
     is_refreshed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_refreshable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
@@ -106,4 +111,6 @@ class Rating(Base):
 class ProhibitedTokens(Base):
     id: Mapped[int_pk]
     token: Mapped[str] = mapped_column(String, nullable=False)
-    expiration_time: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    expiration_time: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )

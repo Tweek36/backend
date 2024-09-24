@@ -1,11 +1,11 @@
 from uuid import UUID
-from pydantic import BaseModel
-from app.schemas.competition import CompetitionItemResponseSchema
+from pydantic import BaseModel, ConfigDict
 from app.utils.pagination import PaginatedResponse
 
 
-class RatingResponseSchema(BaseModel):
-    id: UUID
+class NewRatingSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     competition_id: UUID
     user_id: UUID
     stage: int
@@ -14,32 +14,26 @@ class RatingResponseSchema(BaseModel):
     is_refreshed: bool
 
 
+class RatingSchema(NewRatingSchema):
+    id: UUID
+
+
 class RatingPaginatedResponseSchema(PaginatedResponse):
-    data: list[RatingResponseSchema]
-
-
-class StartRatingPayloadSchema(BaseModel):
-    competition_id: UUID
+    data: list[RatingSchema]
 
 
 class RatingChoiceResponseSchema(BaseModel):
     id: UUID
-    items: list[CompetitionItemResponseSchema]
+    items: list[UUID]
     stage: int = 1
-
-
-class StartRatingResponseSchema(BaseModel):
-    rating_id: UUID
-    cur_choice: RatingChoiceResponseSchema
-
-
-class RefreshRatingPayloadSchema(BaseModel):
-    from_prev: bool = False
+    round: int
+    prev: UUID | None = None
+    next: UUID | None = None
+    winner_id: UUID | None = None
 
 
 class ChoosePayloadSchema(BaseModel):
     winner_id: UUID
-    looser_id: UUID
 
 
 class ChooseResponseSchema(BaseModel):

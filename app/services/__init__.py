@@ -138,14 +138,18 @@ class ModelRequests(Generic[_T]):
             raise HTTPException(status_code=404, detail="Data is out of bounds")
         return data
 
-    async def post(self, **data):
+    async def _post_unfushed(self, **data):
         instance = self.model(**data)
         self.session.add(instance)
+        return instance
+
+    async def post(self, **data):
+        instance = await self._post_unfushed(**data)
         await self.session.commit()
         await self.session.refresh(instance)
         return instance
 
-    async def update(self, id: int | UUID, **data):
+    async def _update_unfushed(self, id: int | UUID, **data):
         instance = await self.session.get(self.model, id)
         if not instance:
             raise HTTPException(
@@ -157,18 +161,23 @@ class ModelRequests(Generic[_T]):
 
         for k, v in data.items():
             setattr(instance, k, v)
+        return instance
 
+    async def update(self, id: int | UUID, **data):
+        instance = await self._update_unfushed(id, **data)
         await self.session.commit()
         await self.session.refresh(instance)
 
         return instance
 
-    async def delete(self, id: int | UUID):
+    async def _delete_unfushed(self, id: int | UUID):
         instance = await self.session.get(self.model, id)
         if not instance:
             raise HTTPException(
                 status_code=404, detail=f"{self.model.__name__} not found"
             )
         await self.session.delete(instance)
-        await self.session.commit()
         return True
+
+    async def delete(self, id: int | UUID):
+        return await self._delete_unfushed(id)
