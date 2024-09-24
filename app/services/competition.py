@@ -1,11 +1,11 @@
 from datetime import datetime
+import math
 import os
 from uuid import UUID
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from app.config import settings
-from app.schemas.competition import (
-    CreateCompetitionItemPayloadSchema,
+from app.schemas.competition_item import (
     UpdateCompetitionItemPayloadSchema,
 )
 from app.services import BaseService, ModelRequests
@@ -19,6 +19,16 @@ from app.services.youtube import YouTubeService
 
 class CompetitionService(BaseService, ModelRequests[Competition]):
     model = Competition
+
+    _youtube_service: YouTubeService = None
+
+    @property
+    def youtube_service(self):
+        if self._youtube_service is None:
+            self._youtube_service = YouTubeService(
+                self.session, self.redis, self._token
+            )
+        return self._youtube_service
 
     async def _process_image(self, image: UploadFile, user_id: UUID) -> str:
         try:
@@ -145,19 +155,6 @@ class CompetitionService(BaseService, ModelRequests[Competition]):
             )
         return competition_item
 
-    async def add_item(self, id: UUID, payload: CreateCompetitionItemPayloadSchema):
-        competition = await self.session.get(Competition, id)
-        self._check_permission(competition, self.token.sub)
-        competition_item = CompetitionItem(**payload.model_dump(), competition_id=id)
-        if not competition_item.title:
-            competition_item.title = await YouTubeService(
-                self.session, self.redis, self.token
-            ).get_video_title(competition_item.videoId)
-        self.session.add(competition_item)
-        await self.session.commit()
-        await self.session.refresh(competition_item)
-        return competition_item
-
     async def patch_item(
         self,
         id: UUID,
@@ -180,9 +177,9 @@ class CompetitionService(BaseService, ModelRequests[Competition]):
             setattr(competition_item, k, v)
 
         if not competition_item.title:
-            competition_item.title = await YouTubeService(
-                self.session, self.redis, self.token
-            ).get_video_title(competition_item.videoId)
+            competition_item.title = await self.youtube_service.get_video_title(
+                competition_item.videoId
+            )
 
         await self.session.commit()
         await self.session.refresh(competition_item)
@@ -203,3 +200,13 @@ class CompetitionService(BaseService, ModelRequests[Competition]):
         await self.session.delete(competition_item)
         await self.session.commit()
         return True
+
+    async def get_stages_total(self, id: UUID):
+        competition = await self.get(id=id)
+
+        stmt = select(func.count(CompetitionItem.id)).filter(
+            CompetitionItem.competition_id == competition.id
+        )
+        items_total: int = await self.session.scalar(stmt)
+
+        return math.ceil(math.log2(items_total))

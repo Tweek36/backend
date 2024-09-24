@@ -4,7 +4,7 @@ from uuid import UUID
 from httpx import AsyncClient
 from app.config import settings
 from app.models.tests import CompetitionItem, Competition
-from app.schemas.competition import CompetitionItemResponseSchema
+from app.schemas.competition_item import CompetitionItemSchema
 from app.schemas.youtube import AddPlaylistPayloadSchema, GetVideoTitleResponseSchema
 from app.services import BaseService
 from fastapi import HTTPException
@@ -56,7 +56,7 @@ class YouTubeService(BaseService):
             .returning(CompetitionItem)
         )
 
-        added: list[CompetitionItemResponseSchema] = []
+        added: list[CompetitionItemSchema] = []
 
         async with AsyncClient() as client:
             while True:
@@ -89,7 +89,8 @@ class YouTubeService(BaseService):
                 ).all()
 
                 added += [
-                    CompetitionItemResponseSchema.model_validate(i, from_attributes=True) for i in result
+                    CompetitionItemSchema.model_validate(i, from_attributes=True)
+                    for i in result
                 ]
 
                 next_page_token = response_data.get("nextPageToken")

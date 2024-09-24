@@ -1,15 +1,24 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, Form, UploadFile, File
-from app.routers import MaxPerPageType, PageType
+from app.routers import (
+    MaxPerPageType,
+    PageType,
+    OptionalMaxPerPageType,
+    OptionalPageType,
+)
 from app.schemas.competition import (
-    CompetitionItemResponseSchema,
-    CompetitionResponseSchema,
+    CompetitionSchema,
     CompetitionPaginatedResponseSchema,
-    CreateCompetitionItemPayloadSchema,
+)
+from app.schemas.competition_item import (
+    CompetitionItemPaginatedResponseSchema,
+    CompetitionItemSchema,
+    NewCompetitionItemSchema,
     UpdateCompetitionItemPayloadSchema,
 )
 from app.services.competition import CompetitionService
-
+from app.services.competition_item import CompetitionItemService
+from app.utils.token import httpbearer
 
 router = APIRouter(prefix="/competition", tags=["Competition"])
 
@@ -25,15 +34,11 @@ async def get_paginated_list(
     )
 
 
-@router.get("/{id}/", response_model=CompetitionResponseSchema)
-async def get(
-    id: UUID,
-    service: CompetitionService = Depends(CompetitionService.get_service),
-):
-    return await service.get(id=id)
-
-
-@router.post("/", response_model=CompetitionResponseSchema)
+@router.post(
+    "/",
+    response_model=CompetitionSchema,
+    dependencies=[Depends(httpbearer)],
+)
 async def post(
     image: UploadFile | None = File(None),
     title: str = Form(),
@@ -49,9 +54,21 @@ async def post(
     )
 
 
-@router.patch("/{id}/", response_model=CompetitionResponseSchema)
+@router.get("/{competition_id}/", response_model=CompetitionSchema)
+async def get(
+    competition_id: UUID,
+    service: CompetitionService = Depends(CompetitionService.get_service),
+):
+    return await service.get(id=competition_id)
+
+
+@router.patch(
+    "/{competition_id}/",
+    response_model=CompetitionSchema,
+    dependencies=[Depends(httpbearer)],
+)
 async def update(
-    id: UUID,
+    competition_id: UUID,
     image: UploadFile | None = File(None),
     title: str | None = Form(None),
     description: str | None = Form(None),
@@ -60,7 +77,7 @@ async def update(
     service: CompetitionService = Depends(CompetitionService.get_service),
 ):
     return await service.update(
-        id=id,
+        id=competition_id,
         image=image,
         title=title,
         description=description,
@@ -69,54 +86,91 @@ async def update(
     )
 
 
-@router.delete("/{id}/")
+@router.delete(
+    "/{competition_id}/",
+    dependencies=[Depends(httpbearer)],
+)
 async def delete(
-    id: UUID,
+    competition_id: UUID,
     service: CompetitionService = Depends(CompetitionService.get_service),
 ):
-    return await service.delete(id=id)
+    return await service.delete(id=competition_id)
 
 
-@router.get("/{id}/item/", response_model=list[CompetitionItemResponseSchema])
+@router.get(
+    "/{competition_id}/item/",
+    response_model=list[CompetitionItemSchema] | CompetitionItemPaginatedResponseSchema,
+)
 async def get_items_list(
-    id: UUID,
-    service: CompetitionService = Depends(CompetitionService.get_service),
+    competition_id: UUID,
+    max_per_page: OptionalMaxPerPageType = None,
+    page: OptionalPageType = None,
+    service: CompetitionItemService = Depends(CompetitionItemService.get_service),
 ):
-    return await service.get_items_list(id=id)
+    return await service.get_optional_paginated_list(
+        max_per_page=max_per_page, page=page, competition_id=competition_id
+    )
 
 
-@router.get("/{id}/item/{item_id}/", response_model=CompetitionItemResponseSchema)
+@router.get("/{competition_id}/item/{id}/", response_model=CompetitionItemSchema)
 async def get_item(
+    competition_id: UUID,
     id: UUID,
-    item_id: UUID,
-    service: CompetitionService = Depends(CompetitionService.get_service),
+    service: CompetitionItemService = Depends(CompetitionItemService.get_service),
 ):
-    return await service.get_item(id=id, item_id=item_id)
+    return await service.get(id=id, competition_id=competition_id)
 
 
-@router.post("/{id}/item/", response_model=CompetitionItemResponseSchema)
+@router.post(
+    "/{competition_id}/item/",
+    response_model=CompetitionItemSchema,
+    dependencies=[Depends(httpbearer)],
+)
 async def add_item(
-    id: UUID,
-    payload: CreateCompetitionItemPayloadSchema,
-    service: CompetitionService = Depends(CompetitionService.get_service),
+    competition_id: UUID,
+    payload: NewCompetitionItemSchema,
+    service: CompetitionItemService = Depends(CompetitionItemService.get_service),
 ):
-    return await service.add_item(id=id, payload=payload)
+    return await service.post(competition_id=competition_id, **payload.model_dump())
 
 
-@router.patch("/{id}/item/{item_id}/", response_model=CompetitionItemResponseSchema)
+@router.patch(
+    "/{competition_id}/item/{item_id}/",
+    response_model=CompetitionItemSchema,
+    dependencies=[Depends(httpbearer)],
+)
 async def patch_item(
-    id: UUID,
+    competition_id: UUID,
     item_id: UUID,
     payload: UpdateCompetitionItemPayloadSchema,
-    service: CompetitionService = Depends(CompetitionService.get_service),
+    service: CompetitionItemService = Depends(CompetitionItemService.get_service),
 ):
-    return await service.patch_item(id=id, item_id=item_id, payload=payload)
+    return await service.update(
+        id=item_id,
+        competition_id=competition_id,
+        **payload.model_dump(exclude_none=True, exclude_unset=True),
+    )
 
 
-@router.delete("/{id}/item/{item_id}/")
+@router.delete(
+    "/{competition_id}/item/{item_id}/",
+    dependencies=[Depends(httpbearer)],
+)
 async def delete_item(
-    id: UUID,
+    competition_id: UUID,
     item_id: UUID,
+    service: CompetitionItemService = Depends(CompetitionItemService.get_service),
+):
+    return await service.delete(id=item_id, competition_id=competition_id)
+
+
+@router.get(
+    "/{competition_id}/stages_total/",
+    response_model=int,
+    dependencies=[Depends(httpbearer)],
+)
+async def get_rounds_total(
+    competition_id: UUID,
     service: CompetitionService = Depends(CompetitionService.get_service),
 ):
-    return await service.delete_item(id=id, item_id=item_id)
+    return await service.get_stages_total(id=competition_id)
